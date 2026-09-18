@@ -1,0 +1,104 @@
+# ==============================================================================
+# Git Ignore Configuration
+# ==============================================================================
+
+# --- Environment & Credentials ---
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!*.env.example
+
+# --- Databases, Storage & Bot Persistent Data ---
+dbbot/*
+!dbbot/db_prayers/
+dbbot/db_prayers/*
+!dbbot/db_prayers/IMG_20260617_213612_555.jpg
+database/
+*.session
+*.session-journal
+*.db
+*.sqlite
+*.sqlite3
+verify_recent_questions.json
+
+# --- Downloads & Cache ---
+downloads/
+google/
+saved_media/
+
+# --- Logs & Debug Output Files ---
+*.log
+logs/
+debug_*.html
+debug_full.html
+debug_ig.html
+scrapers/logs/*
+!scrapers/logs/.gitkeep
+
+# --- Screenshots & Temp Images in Root ---
+hi.png
+hi2.png
+
+# --- Python Bytecode & Cache (All Modules & Submodules) ---
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.*.py[cod]
+**/*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+htmlcov/
+
+# --- Editor, IDE & OS Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

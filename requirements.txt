@@ -1,0 +1,21 @@
+# Core Telegram client & crypto
+Telethon>=1.36.0
+cryptg>=0.4.0
+python-dotenv>=1.0.0
+
+# Network & async
+aiohttp>=3.9.0
+aiofiles>=23.2.0
+requests>=2.31.0
+
+# Media processing & scrapers
+pillow>=10.0.0
+beautifulsoup4>=4.12.0
+shazamio>=0.8.0
+edge-tts>=6.1.0
+yt-dlp>=2024.0.0
+pydub>=0.25.1
+
+# System & security
+psutil>=5.9.0
+cryptography>=41.0.0
