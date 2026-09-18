@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Telethon](https://img.shields.io/badge/Telethon-MTProto-blueviolet?logo=telegram&logoColor=white)](https://github.com/LonamiWebs/Telethon)
-[![AI](https://img.shields.io/badge/AI-Gemini%20%7C%20Groq-4285F4?logo=google&logoColor=white)](https://aistudio.google.com/)
+[![AI](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?logo=google&logoColor=white)](https://aistudio.google.com/)
 [![OS](https://img.shields.io/badge/OS-Linux%20%7C%20macOS%20%7C%20Termux-success?logo=linux&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -30,7 +30,7 @@ A multifunction Telegram bot built with **Telethon (MTProto API)**. It handles m
 
 This bot serves as a flexible all-in-one assistant for both personal chats and Telegram groups:
 - **Media & Music Downloads**: Automatically downloads videos, audio, and photos from links (TikTok, IG, YouTube, X, Spotify, etc.).
-- **AI Assistant**: Answers questions, writes code, and analyzes images using Google Gemini (with multi-key rotation) and Groq.
+- **AI Assistant**: Answers questions, writes code, and analyzes images using Google Gemini with multi-key rotation.
 - **Group Moderation & Security**: Protects groups from spam bots via an AI-generated verification challenge in private chat, plus auto-replies (filters), notes with media album support, and moderation tools (ban, mute, kick).
 - **Motorsports Hub**: Tracks Formula 1 and MotoGP schedules, standings, and race results rendered as clean visual telemetry cards.
 - **Server Administration**: Lets the bot host manage chats, read messages, and reply or upload files directly from the server terminal without opening Telegram.
@@ -41,7 +41,6 @@ This bot serves as a flexible all-in-one assistant for both personal chats and T
 
 ### 1. Artificial Intelligence & Vision
 - **Google Gemini (Flash-Lite)**: Multi-turn chat with automatic API key rotation to prevent rate limits.
-- **Groq Fallback**: Backup AI provider powered by `qwen/qwen3-32b`.
 - **Multimodal Vision (`/aigv`)**: Reply to any photo, sticker, or image for visual explanation.
 - **AI Image Generation (`/draw`)**: Creates images from text prompts.
 - **Custom AI Persona (`/setstyle`)**: Switch conversational tone (casual, sarcastic, formal, etc.).
@@ -392,11 +391,6 @@ OWNER_ID=987654321
 # Get keys from: https://aistudio.google.com/app/apikey
 GEMINI_KEYS=AIzaSyA...,AIzaSyB...
 MODEL_NAME=gemini-3.1-flash-lite
-
-# Groq API Key (Optional / Fallback)
-# Get from: https://console.groq.com/keys
-GROQ_KEY=gsk_...
-GROQ_MODEL=qwen/qwen3-32b
 
 # ==========================================
 # Storage & Mirror (Optional)
