@@ -102,14 +102,12 @@ async def _resolve_gdrive(session: aiohttp.ClientSession, url: str) -> Tuple[str
 
             html_text = await resp.text()
 
-            # 1. Cek token dari cookies session
             token = None
             for key, morsel in session.cookie_jar.filter_cookies(base_url).items():
                 if key.startswith("download_warning"):
                     token = morsel.value
                     break
 
-            # 2. Cek form action download (format Google Drive modern: drive.usercontent.google.com/download)
             try:
                 soup = BeautifulSoup(html_text, "html.parser")
                 form = soup.find("form", id="download-form") or soup.find("form", action=re.compile(r"drive\.usercontent\.google\.com|download", re.I))
@@ -121,14 +119,12 @@ async def _resolve_gdrive(session: aiohttp.ClientSession, url: str) -> Tuple[str
                             action = urljoin("https://drive.usercontent.google.com", action)
                         return f"{action}?{urlencode(inputs)}", req_headers
 
-                # 3. Cek tag <a id="uc-download-link">
                 link = soup.find("a", id="uc-download-link")
                 if link and link.get("href"):
                     return urljoin(base_url, link["href"]), req_headers
             except Exception:
                 pass
 
-            # 4. Cek regex confirm token
             if not token:
                 cm = re.search(r'confirm=([0-9A-Za-z_-]+)', html_text)
                 if cm:
@@ -141,10 +137,9 @@ async def _resolve_gdrive(session: aiohttp.ClientSession, url: str) -> Tuple[str
 
     return base_url, req_headers
 
-
 async def _resolve_mediafire(session: aiohttp.ClientSession, url: str) -> Tuple[str, Dict[str, str]]:
     """Resolve Mediafire share/landing link ke direct CDN link."""
-    # Normalisasi URL jika bentuknya mediafire.com/?xxx
+
     m_short = re.search(r'mediafire\.com/\?([a-zA-Z0-9_-]+)', url)
     if m_short:
         url = f"https://www.mediafire.com/file/{m_short.group(1)}"
@@ -158,7 +153,7 @@ async def _resolve_mediafire(session: aiohttp.ClientSession, url: str) -> Tuple[
         async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=20), allow_redirects=True) as resp:
             content_type = resp.headers.get("Content-Type", "").lower()
             cd = resp.headers.get("Content-Disposition", "").lower()
-            # Jika sudah otomatis redirect ke file biner
+
             if "attachment" in cd or ("text/html" not in content_type and "text/plain" not in content_type):
                 return str(resp.url), dl_headers
 
@@ -167,14 +162,13 @@ async def _resolve_mediafire(session: aiohttp.ClientSession, url: str) -> Tuple[
     except Exception as e:
         logger.warning(f"[Mediafire resolver] aiohttp request error: {e}")
 
-    # Jika aiohttp diblokir atau kena proteksi bot, coba via curl
+
     if not html_text or ("downloadButton" not in html_text and "download_link" not in html_text):
         curl_html = await _fetch_html_fallback_curl(url, referer="https://www.mediafire.com/")
         if curl_html:
             html_text = curl_html
 
     if html_text:
-        # 1. BeautifulSoup parsing
         try:
             soup = BeautifulSoup(html_text, "html.parser")
             btn = soup.select_one("a#downloadButton, a.popsok, a.download_link, a[aria-label='Download file']")
@@ -187,7 +181,6 @@ async def _resolve_mediafire(session: aiohttp.ClientSession, url: str) -> Tuple[
         except Exception:
             pass
 
-        # 2. Comprehensive regex patterns
         patterns = [
             r'href=["\']((?:https?:)?//download\d*\.mediafire\.com/[^"\']+)["\']',
             r'id=["\']downloadButton["\'][^>]*href=["\']([^"\']+)["\']',
@@ -326,7 +319,6 @@ def _extract_download_link_from_html(html: str, base_url: str) -> Optional[str]:
     if not html:
         return None
 
-    # 1. Cek meta refresh
     meta_refresh = re.search(r'<meta[^>]*http-equiv=[\'"]refresh[\'"][^>]*content=[\'"][^;\'"]*;\s*url=([^"\'\s>]+)[\'"]', html, re.I)
     if meta_refresh:
         target = meta_refresh.group(1).strip()
@@ -336,19 +328,16 @@ def _extract_download_link_from_html(html: str, base_url: str) -> Optional[str]:
     try:
         soup = BeautifulSoup(html, "html.parser")
 
-        # 2. Cek tag <a> dengan atribut download HTML5
         a_download = soup.find("a", attrs={"download": True, "href": True})
         if a_download and a_download["href"] and not a_download["href"].startswith("#"):
             return urljoin(base_url, a_download["href"])
 
-        # 3. Cek tag <a> yang menuju ekstensi file biner langsung
         for a in soup.find_all("a", href=True):
             href = a["href"].strip()
             if not href.startswith("#") and not href.startswith("javascript:"):
                 if BIN_EXT_PATTERN.search(href):
                     return urljoin(base_url, href)
 
-        # 4. Cek tombol/link dengan selector id/class download
         btn = soup.select_one(
             "a#downloadButton, a#download_link, a#download, a.btn-download, a.btn_download, "
             "a[class*='download' i], a[id*='download' i], a[aria-label*='download' i]"
@@ -358,7 +347,6 @@ def _extract_download_link_from_html(html: str, base_url: str) -> Optional[str]:
             if not href.startswith("#") and not href.startswith("javascript:"):
                 return urljoin(base_url, href)
 
-        # 5. Cek teks anchor yang secara eksplisit berisi 'download' / 'unduh'
         text_btn = soup.find(
             "a",
             string=re.compile(r"^\s*(?:direct\s+)?download(?:\s+now|\s+file)?\s*$|^\s*unduh(?:\s+sekarang|\s+file)?\s*$", re.I),
@@ -367,7 +355,6 @@ def _extract_download_link_from_html(html: str, base_url: str) -> Optional[str]:
         if text_btn and text_btn["href"] and not text_btn["href"].startswith("#"):
             return urljoin(base_url, text_btn["href"])
 
-        # 6. Cek data-url atau data-href
         for tag in soup.find_all(attrs={"data-url": True}):
             d_url = tag["data-url"].strip()
             if d_url and not d_url.startswith("#") and not d_url.startswith("javascript:"):
@@ -378,7 +365,6 @@ def _extract_download_link_from_html(html: str, base_url: str) -> Optional[str]:
             if d_href and not d_href.startswith("#") and not d_href.startswith("javascript:"):
                 return urljoin(base_url, d_href)
 
-        # 7. Cek <form> dengan submit button download
         for form in soup.find_all("form"):
             action = form.get("action", "").strip()
             form_text = form.get_text().lower()
@@ -395,7 +381,6 @@ def _extract_download_link_from_html(html: str, base_url: str) -> Optional[str]:
     except Exception as soup_err:
         logger.debug(f"[Extract link from HTML] BS4 error: {soup_err}")
 
-    # 8. Regex JavaScript redirect / download variables
     js_patterns = [
         r'window\.location(?:\.href)?\s*=\s*[\'"]([^\'"]+)[\'"]',
         r'location\.replace\([\'"]([^\'"]+)[\'"]\)',
@@ -417,7 +402,7 @@ async def _resolve_from_html_content(session: aiohttp.ClientSession, html_conten
     dl_headers = {"Referer": source_url, "User-Agent": BROWSER_HEADERS["User-Agent"]}
     extracted = _extract_download_link_from_html(html_content, source_url)
     if extracted and extracted != source_url:
-        # Jika link yang diekstrak mengarah ke halaman lain, coba ikuti sekali lagi (2nd hop)
+
         low_ext = extracted.lower()
         if not any(low_ext.endswith(ext) or f"{ext}?" in low_ext for ext in BINARY_EXTENSIONS):
             try:
@@ -457,7 +442,6 @@ async def _resolve_generic_landing(session: aiohttp.ClientSession, url: str) -> 
             current_url = str(resp.url)
             dl_headers["Referer"] = current_url
 
-            # Jika respons bukan HTML atau ada header Content-Disposition attachment, URL tujuan adalah direct link
             if "attachment" in cd or ("text/html" not in content_type and "text/plain" not in content_type):
                 return current_url, dl_headers
 
@@ -465,23 +449,19 @@ async def _resolve_generic_landing(session: aiohttp.ClientSession, url: str) -> 
     except Exception as e:
         logger.debug(f"[Generic resolver] aiohttp error: {e}")
 
-    # Fallback ke curl jika kosong atau kena blocking
     if not html:
         curl_html = await _fetch_html_fallback_curl(url)
         if curl_html:
             html = curl_html
 
     if html:
-        # Coba ekstrak link download dari HTML
         extracted_link = _extract_download_link_from_html(html, current_url)
         if extracted_link and extracted_link != current_url:
-            # Cek apakah extracted link mengarah ke biner langsung atau perlu 2nd hop
             low_ext = extracted_link.lower()
             is_bin = any(low_ext.endswith(ext) or f"{ext}?" in low_ext for ext in BINARY_EXTENSIONS)
             if is_bin:
                 return extracted_link, dl_headers
 
-            # Lakukan pengecekan 2nd hop untuk halaman click-through / countdown
             try:
                 async with session.get(
                     extracted_link,
@@ -502,7 +482,6 @@ async def _resolve_generic_landing(session: aiohttp.ClientSession, url: str) -> 
 
             return extracted_link, dl_headers
 
-    # Terakhir, cek curl effective url jika ada redirect HTTP yang tidak terdeteksi
     try:
         cmd = ["curl", "-s", "-L", "-o", "/dev/null", "-w", "%{url_effective}", "-A", BROWSER_HEADERS["User-Agent"], url]
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
@@ -547,5 +526,4 @@ async def resolve_direct_url(session: aiohttp.ClientSession, url: str) -> Tuple[
     if "catbox.moe" in low:
         return url, default_headers
 
-    # Coba resolver umum untuk situs landing page / redirect
     return await _resolve_generic_landing(session, url)

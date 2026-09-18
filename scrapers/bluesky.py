@@ -155,21 +155,20 @@ class BlueskyScraper:
         like_count = post.get("likeCount", 0) or 0
         reply_count = post.get("replyCount", 0) or 0
 
-        # Waktu posting
+        # Post Time
         created_at_str = record.get("createdAt", "")
         posted_at = int(time.time())
 
-        # Ekstraksi media (Images / Video)
+        # Extract Media
         media_items: List[MediaItem] = []
         embed = post.get("embed", {})
         embed_type = embed.get("$type", "")
 
-        # Jika embed terbungkus dalam recordWithMedia
         if "recordWithMedia" in embed_type:
             embed = embed.get("media", {})
             embed_type = embed.get("$type", "")
 
-        # A. Gambar
+        # A. Image
         if "images" in embed_type:
             images = embed.get("images", [])
             for img in images:
@@ -215,7 +214,7 @@ class BlueskyScraper:
     async def _download_single_file(self, item: MediaItem, dest_path: str) -> bool:
         """Download file media atau stream video m3u8 menggunakan aria2 atau ffmpeg."""
         async with self.semaphore:
-            # Jika video berformat HLS (m3u8), gunakan ffmpeg untuk merender ke MP4
+
             if item.type == "VIDEO" and (".m3u8" in item.url or "playlist" in item.url):
                 cmd = [
                     "ffmpeg", "-y",

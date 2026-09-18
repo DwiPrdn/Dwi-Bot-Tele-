@@ -157,11 +157,9 @@ def render_fillings(text: str, user, chat_title: str) -> str:
     fullname = (first + " " + last).strip()
     username = getattr(user, "username", None)
 
-    # Bersihkan nama untuk mention markdown
     clean_first = first.replace('[', '').replace(']', '').replace('`', '') or "User"
     mention = f"[{clean_first}](tg://user?id={user.id})"
 
-    # Escape karakter reserved markdown v1 (_ dan *) agar tidak bentrok formatting
     safe_first = first.replace('_', '\\_').replace('*', '\\*')
     safe_last = last.replace('_', '\\_').replace('*', '\\*')
     safe_fullname = fullname.replace('_', '\\_').replace('*', '\\*')
@@ -199,7 +197,7 @@ async def send_stored_media_or_text(event_or_client, target, text, media_ref, bu
                 f.get("file_path") for f in files_meta
                 if isinstance(f, dict) and f.get("file_path") and os.path.exists(f.get("file_path"))
             ]
-            # Prioritas 1: Kirim dari file lokal yang sudah tersimpan di server
+            
             if local_paths:
                 try:
                     return await client.send_file(
@@ -213,7 +211,6 @@ async def send_stored_media_or_text(event_or_client, target, text, media_ref, bu
                 except Exception as e:
                     logger.error(f"Gagal kirim album dari file lokal: {e}", exc_info=True)
 
-            # Fallback 2: Ambil dari pesan Telegram asli jika file lokal belum lengkap
             chat_id = media_ref.get("chat_id")
             msg_ids = media_ref.get("msg_ids") or [
                 f.get("msg_id") for f in files_meta if isinstance(f, dict) and f.get("msg_id")
@@ -231,7 +228,7 @@ async def send_stored_media_or_text(event_or_client, target, text, media_ref, bu
                             parse_mode="md",
                             reply_to=reply_to
                         )
-                        # Cache ke lokal
+
                         try:
                             dest_dir = os.path.join(SAVED_MEDIA_DIR, str(target))
                             os.makedirs(dest_dir, exist_ok=True)
@@ -284,7 +281,6 @@ async def send_stored_media_or_text(event_or_client, target, text, media_ref, bu
             except Exception as e:
                 logger.warning(f"Gagal ambil media tersimpan ({media_ref}): {e} - fallback ke teks.")
 
-    # 3. Teks fallback (jika tidak ada media atau media gagal dimuat)
     if text:
         return await client.send_message(target, text, buttons=buttons, parse_mode="md", reply_to=reply_to)
     return None
@@ -484,7 +480,6 @@ def register_moderation(app, load_db, save_db, is_user_admin, OWNER_ID,
         listing = "\n".join(f"• <code>{html.escape(t)}</code>" for t in sorted(chat_filters))
         await event.reply(f"📋 <b>Filter aktif di {scope}:</b>\n{listing}", parse_mode="html")
 
-    # Auto-reply listener - HARUS didaftar belakangan & jangan nabrak command lain.
     @app.on(events.NewMessage())
     async def filter_autoreply(event):
         if (not event.is_group and not event.is_private) or not event.raw_text:
@@ -501,7 +496,7 @@ def register_moderation(app, load_db, save_db, is_user_admin, OWNER_ID,
                 sender = await event.get_sender()
 
                 if isinstance(entry, int):
-                    # legacy format (entry = msg_id)
+
                     media_ref = {"chat_id": event.chat_id, "msg_id": entry}
                     text = None
                 elif isinstance(entry, dict):
@@ -515,7 +510,7 @@ def register_moderation(app, load_db, save_db, is_user_admin, OWNER_ID,
                     await send_stored_media_or_text(event, event.chat_id, text, media_ref, reply_to=event.id)
                 except Exception as e:
                     logger.error(f"Gagal kirim balasan filter '{trigger}': {e}")
-                break  # satu pesan cuma mancing 1 filter, biar gak spam kalo kena banyak match
+                break  
 
     # ---------------- NOTES ----------------
 
@@ -601,9 +596,6 @@ def register_moderation(app, load_db, save_db, is_user_admin, OWNER_ID,
         text = render_fillings(note.get("text"), sender, getattr(chat, "title", None))
         media_ref = dict(note) if note.get("type") in ("media", "album") else None
 
-        # Pengaturan reply: Jika membalas pesan user lain, reply ke pesan tersebut.
-        # Jika tidak, cek apakah settings reply aktif (default: True).
-        # Jika reply dinonaktifkan via /notereply off, kirim note tanpa reply_to (None).
         reply_msg = await event.get_reply_message()
         if reply_msg:
             target_reply_id = reply_msg.id

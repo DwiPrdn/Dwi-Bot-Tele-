@@ -97,7 +97,7 @@ def shortcode_to_media_id(shortcode: str) -> Optional[int]:
         return None
     if shortcode.isdigit():
         return int(shortcode)
-    # Jika shortcode panjang (private share link dengan tracking suffix > 28 karakter)
+
     if len(shortcode) > 28:
         shortcode = shortcode[:-28]
     alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
@@ -218,7 +218,6 @@ class InstagramScraper:
         if m_stories:
             return m_stories.group(1)
 
-        # Cek format profil /{username}/p/{shortcode}
         m_user_post = re.search(r'[^/?#&]+/(?:p|reel)/([a-zA-Z0-9_-]+)', path)
         if m_user_post:
             return m_user_post.group(1)
@@ -276,7 +275,6 @@ class InstagramScraper:
 
                     html = await response.text()
 
-                    # Deteksi jika diredirect ke checkpoint/scraping warning saat memakai cookies
                     if use_cookies and (
                         "__coig_challenge_redirected" in final_url
                         or "login" in final_url
@@ -294,11 +292,10 @@ class InstagramScraper:
     def _find_target_post(self, data: Any, shortcode: str, media_id_str: str = "") -> Optional[Dict[str, Any]]:
         """Mencari objek postingan Instagram target secara rekursif dari struktur JSON/Relay."""
         if isinstance(data, dict):
-            # Abaikan item profil timeline agar tidak salah mengambil grid profile creator
+
             if 'profile_grid_items' in data or 'xdt_api__v1__profile_timeline' in data:
                 return None
 
-            # Cocokkan code / shortcode
             c = data.get("code") or data.get("shortcode")
             pk = str(data.get("pk") or data.get("id") or "")
             is_match = (c == shortcode) or (media_id_str and pk == media_id_str)
@@ -315,7 +312,6 @@ class InstagramScraper:
             if is_match and has_media:
                 return data
 
-            # Terbungkus dalam sub-key xdt_api__v1__media__shortcode__web_info
             if "xdt_api__v1__media__shortcode__web_info" in data:
                 info = data["xdt_api__v1__media__shortcode__web_info"]
                 if isinstance(info, dict) and info.get("items"):
@@ -565,7 +561,6 @@ class InstagramScraper:
                     except Exception:
                         pass
 
-                # Cari blok JSON di dalam wrapper JS
                 matches = re.finditer(r'(\{.*?\"(?:code|shortcode)\":\s*\"' + re.escape(shortcode) + r'\".*?\})', txt)
                 for m in matches:
                     try:
@@ -722,7 +717,7 @@ class InstagramScraper:
             success = await aria2_download(url, dest_path, headers=headers)
             if success:
                 logger.info(f"[InstagramScraper] Berhasil unduh: {dest_path}")
-                # Konversi file .webp ke .jpg demi kompatibilitas penuh Telegram
+
                 if dest_path.lower().endswith('.jpg') and os.path.exists(dest_path):
                     try:
                         with open(dest_path, 'rb') as f:
@@ -825,7 +820,6 @@ class InstagramScraper:
                 "error": "Tidak ada media gambar/video yang dapat diekstrak dari Story Instagram ini."
             }
 
-        # Dedup media items berdasarkan URL
         seen = set()
         deduped: List[MediaItem] = []
         for m in all_media_items:
@@ -884,7 +878,6 @@ class InstagramScraper:
         story_id = None
         username = "ig_story_user"
 
-        # Cek share link /s/{code}
         if "/s/" in url:
             m_s = re.search(r'/s/([a-zA-Z0-9_-]+)', url)
             if m_s:
@@ -897,13 +890,11 @@ class InstagramScraper:
                 except Exception:
                     pass
 
-        # Cek highlight standard: stories/highlights/{id}
         if not highlight_id:
             m_hl = re.search(r'stories/highlights/(\d+)', url)
             if m_hl:
                 highlight_id = m_hl.group(1)
 
-        # Cek single story item: stories/{username}/{story_id}
         if not highlight_id:
             m_single = re.search(r'stories/(?!highlights/)([^/?#&]+)/(\d+)', url)
             if m_single:
@@ -916,7 +907,6 @@ class InstagramScraper:
 
         # 2. Cek Mode Cookieless vs Cookies Autentikasi
         if not self.has_session:
-            # Cookieless Story TIDAK didukung oleh Meta
             debug_content = f"""<!DOCTYPE html>
 <html>
 <head>

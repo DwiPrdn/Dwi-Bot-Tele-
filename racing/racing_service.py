@@ -9,7 +9,7 @@ logger = logging.getLogger("RacingService")
 
 # In-memory cache to avoid rate limits and keep responses snappy
 _CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL = 300  # 5 minutes
+CACHE_TTL = 300  
 
 
 def _get_cache(key: str) -> Optional[Any]:
@@ -564,7 +564,6 @@ class RacingService:
                     "number": num_str,
                 })
 
-            # Hitung gap poin terhadap pimpinan klasemen
             if items:
                 try:
                     p1_pts = float(items[0].get("points", 0))

@@ -326,8 +326,6 @@ echo ""
 info "Konfigurasi AI Services (Gemini & Groq):"
 NEW_GEMINI_KEYS=$(ask "Gemini API Keys (pisahkan dengan koma jika multi-key)" "$OLD_GEMINI_KEYS")
 NEW_MODEL_NAME=$(ask "Gemini Model" "$OLD_MODEL_NAME")
-NEW_GROQ_KEY=$(ask "Groq API Key" "$OLD_GROQ_KEY")
-NEW_GROQ_MODEL=$(ask "Groq Model" "$OLD_GROQ_MODEL")
 
 echo ""
 info "Pengaturan Opsional:"
@@ -359,8 +357,6 @@ OWNER_ID=${NEW_OWNER_ID}
 GEMINI_KEYS=${NEW_GEMINI_KEYS}
 MODEL_NAME=${NEW_MODEL_NAME}
 
-GROQ_KEY=${NEW_GROQ_KEY}
-GROQ_MODEL=${NEW_GROQ_MODEL}
 
 # ==========================================
 # Storage & Mirror (Opsional)

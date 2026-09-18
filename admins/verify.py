@@ -71,18 +71,6 @@ from moderation import render_fillings, send_stored_media_or_text, DEFAULT_WELCO
 
 logger = logging.getLogger("Verify")
 
-# Nge-generate pertanyaan itu stateless tiap panggilan - Gemini gak inget
-# udah pernah nanya apa sebelumnya, jadi kalo cuma dikasih prompt polos dia
-# gampang balik ke pola "aman" yang itu2 aja (kucing/apel/2+2). Buat maksa
-# variasi: (1) kasih tema acak tiap panggilan, (2) kasih daftar pertanyaan
-# yang barusan dipake biar model sengaja ngehindarin itu.
-#
-# List-nya DIPERSIST ke disk (bukan cuma in-memory) - soalnya kalo cuma
-# in-memory, tiap kali bot di-restart (yang kejadian TERUS pas develop/testing
-# begini) daftarnya ke-reset kosong, jadi kesannya "pertanyaannya itu2 mulu"
-# padahal mekanismenya udah ada. Path-nya dipatok ke lokasi file verify.py
-# sendiri (bukan relative ke cwd) - biar gak kena masalah working-directory
-# pas jalan lewat systemd (sama kayak kasus debug_full.html dulu).
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _RECENT_Q_FILE = os.path.join(_MODULE_DIR, "verify_recent_questions.json")
 _RECENT_CAP = 12
@@ -121,9 +109,9 @@ TOPIC_HINTS = [
 ]
 
 MAX_ATTEMPTS = 3
-TIMEOUT_SECONDS = 5 * 60   # 5 menit - samain ama teks welcome yg biasa lu pake
-WARNING_SECONDS = 60      # kasih 1x warning pas sisa waktu segini
-SWEEP_INTERVAL = 15       # cek member telat tiap 15 detik (biar warning & kick presisi)
+TIMEOUT_SECONDS = 5 * 60   
+WARNING_SECONDS = 60
+SWEEP_INTERVAL = 15
 
 QUESTION_SYSTEM_PROMPT = """You are a CAPTCHA question generator for a Telegram group anti-spam-bot gate.
 
@@ -242,10 +230,10 @@ async def generate_question(language: str, gemini_keys, model_name):
     if result and result.get("question"):
         question = _strip_markdown_noise(result["question"])
         _recent_questions.append(question)
-        del _recent_questions[:-_RECENT_CAP]  # keep only the last _RECENT_CAP entries
+        del _recent_questions[:-_RECENT_CAP]  
         _save_recent_questions(_recent_questions)
         return question, result.get("answer_context", "")
-    # Fallback kalo Gemini gagal/timeout - tetep ada pertanyaan, bukan nge-block orang gara2 API down
+        
     return "2 + 2 = ?", "The answer must be 4 (in digits or words, any language)."
 
 
@@ -254,7 +242,7 @@ async def judge_answer(question: str, answer_context: str, user_answer: str, gem
     prompt = f"Question asked: {question}\nWhat a correct answer requires: {answer_context}\nUser's reply: {user_answer}"
     result = await _call_gemini_json(JUDGE_SYSTEM_PROMPT, prompt, schema, gemini_keys, model_name, temperature=0.2)
     if result is None:
-        return False  # API down -> jangan asal loloskan, biar user coba lagi
+        return False  
     return bool(result.get("correct", False))
 
 
@@ -428,7 +416,7 @@ def register_verify(app, load_db, save_db, is_user_admin, OWNER_ID,
         group_title = getattr(chat, "title", None)
 
         now = time.time()
-        # Bersihkan cache lama (> 60 detik)
+        
         stale_keys = [k for k, ts in _RECENT_WELCOMES.items() if now - ts > 60]
         for k in stale_keys:
             _RECENT_WELCOMES.pop(k, None)
@@ -453,7 +441,7 @@ def register_verify(app, load_db, save_db, is_user_admin, OWNER_ID,
             return
 
         if not verify_enabled:
-            # Welcome reguler ketika verifikasi tidak aktif
+
             w_db = load_db(DB_WELCOME)
             w_entry = w_db.get(str(chat_id), {"enabled": True, "type": "text", "text": DEFAULT_WELCOME, "chat_id": None, "msg_id": None})
             if not w_entry.get("enabled", True):
@@ -468,7 +456,6 @@ def register_verify(app, load_db, save_db, is_user_admin, OWNER_ID,
                     logger.error(f"Gagal kirim regular welcome buat {user.id} di {chat_id}: {e}")
             return
 
-        # AI Verify aktif: mute member & kirim welcome dengan tombol verifikasi DM
         pending = load_db(DB_VERIFY_PENDING)
         for user in valid_users:
             try:
@@ -529,7 +516,7 @@ def register_verify(app, load_db, save_db, is_user_admin, OWNER_ID,
         if not event.is_private or not event.raw_text:
             return
         if event.raw_text.startswith("/"):
-            return  # /start dkk ditangani terpisah, jangan ke-eat di sini
+            return  
 
         pending = load_db(DB_VERIFY_PENDING)
         key, entry = _find_active_entry(pending, event.sender_id)
@@ -544,7 +531,7 @@ def register_verify(app, load_db, save_db, is_user_admin, OWNER_ID,
 
         if entry["stage"] == "awaiting_answer":
             correct = await judge_answer(entry["question"], entry["answer_context"], event.raw_text, GEMINI_KEYS, MODEL_NAME)
-            pending = load_db(DB_VERIFY_PENDING)  # re-load, jaga2 kalo keubah pas nunggu Gemini
+            pending = load_db(DB_VERIFY_PENDING)  
             entry = pending.get(key)
             if not entry or entry["stage"] != "awaiting_answer":
                 return
@@ -650,7 +637,7 @@ async def verify_timeout_loop(app, load_db, save_db, DB_VERIFY_PENDING):
                             try:
                                 await app.send_message(user_id, f"⏰ Time's up - you didn't finish verifying in time and were removed from **{entry.get('group_title', 'the group')}**. Feel free to rejoin and try again.", parse_mode="md")
                             except Exception:
-                                pass  # gapapa kalo gagal DM, yang penting kick-nya jalan
+                                pass  
                         except Exception as e:
                             logger.warning(f"Gagal kick telat-verifikasi buat {key}: {e}", exc_info=True)
                     del pending[key]

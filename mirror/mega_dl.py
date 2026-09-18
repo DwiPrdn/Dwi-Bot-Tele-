@@ -28,9 +28,7 @@ def is_mega_url(url: str) -> bool:
 
 def parse_mega_url(url: str) -> Tuple[Optional[str], Optional[str]]:
     """Ekstrak file_id dan decryption key dari URL Mega."""
-    # Format modern: mega.nz/file/FILE_ID#FILE_KEY
-    # Format legacy: mega.nz/#!FILE_ID!FILE_KEY
-    # Format export: mega.nz/#N!FILE_ID!FILE_KEY
+
     m = re.search(r'mega(?:\.co)?\.nz/(?:file/|#!)?([a-zA-Z0-9_-]+)[#!]([a-zA-Z0-9_-]+)', url)
     if m:
         return m.group(1), m.group(2)
@@ -96,7 +94,6 @@ async def download_mega(
         if len(key_a32) < 8:
             return {"success": False, "file_path": None, "error": "Decryption key Mega rusak atau kurang lengkap.", "looks_like_html": False}
 
-        # Kunci AES 128-bit: key[0]^key[4], key[1]^key[5], key[2]^key[6], key[3]^key[7]
         k = (
             key_a32[0] ^ key_a32[4],
             key_a32[1] ^ key_a32[5],
@@ -105,7 +102,6 @@ async def download_mega(
         )
         aes_key = a32_to_bytes(k)
 
-        # IV 16 bytes: key[4], key[5], 0, 0
         iv = struct.pack('>II', key_a32[4], key_a32[5]) + b'\x00' * 8
 
         api_url = "https://g.api.mega.co.nz/cs?id=0"
@@ -136,7 +132,6 @@ async def download_mega(
             file_size = file_info.get("s", 0)
             at = file_info.get("at", "")
 
-            # Dekripsi nama file
             attrs = decrypt_attr(at, aes_key)
             filename = attrs.get("n", f"mega_{file_id}")
             filename = re.sub(r'[\\/*?:"<>|]', "", filename).strip() or f"mega_{file_id}"

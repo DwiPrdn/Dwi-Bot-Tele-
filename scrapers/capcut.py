@@ -140,17 +140,14 @@ class CapCutScraper:
         """Ekstrak video URL MP4, judul, deskripsi, dan kreator template dari HTML."""
         soup = BeautifulSoup(html_content, "html.parser")
 
-        # 1. Cari video URL MP4
         video_url = None
 
-        # Prioritas 1: Meta og:video:url / og:video:secure_url / og:video
         for prop in ["og:video:url", "og:video:secure_url", "og:video", "twitter:player:stream"]:
             tag = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
             if tag and tag.get("content") and tag.get("content").startswith("http"):
                 video_url = tag.get("content")
                 break
 
-        # Prioritas 2: Cari tag video
         if not video_url:
             for v in soup.find_all("video"):
                 src = v.get("src")
@@ -158,19 +155,17 @@ class CapCutScraper:
                     video_url = src
                     break
 
-        # Prioritas 3: Regex mp4 di dalam HTML
         if not video_url:
             mp4_matches = re.findall(r'https:[^\"\'\s\<\>]+\.mp4[^\"\'\s\<\>]*', html_content)
             for m in mp4_matches:
                 clean_m = m.replace('\\/', '/').replace('&amp;', '&')
-                # Abaikan video landing page umum jika ada video template spesifik
+
                 video_url = clean_m
                 break
 
         if not video_url:
             raise ParsingException("Gagal menemukan link video MP4 pada template CapCut ini.")
 
-        # 2. Judul, deskripsi, dan kreator
         og_title = soup.find("meta", property="og:title")
         og_desc = soup.find("meta", property="og:description")
         meta_desc = soup.find("meta", attrs={"name": "description"})
@@ -182,12 +177,10 @@ class CapCutScraper:
             or title_val
         ).strip()
 
-        # Bersihkan format "CapCut template: ..."
         caption_clean = re.sub(r'^CapCut template:\s*', '', caption_val).strip()
         if not caption_clean:
             caption_clean = "CapCut Template"
 
-        # Kreator
         username = "CapCut Creator"
         m_author = re.search(r'by\s+([A-Za-z0-9_\.\s]+)\s+on\s+CapCut', caption_val, re.IGNORECASE)
         if m_author:

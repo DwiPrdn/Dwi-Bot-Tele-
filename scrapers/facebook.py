@@ -231,13 +231,11 @@ class FacebookScraper:
         """
         soup = BeautifulSoup(html_content, "html.parser")
 
-        # 1. Validasi Halaman: Jangan scrape jika dilempar ke feed rekomendasi / login umum!
         og_url = soup.find("meta", property="og:url")
         og_title = soup.find("meta", property="og:title")
         title_text = (og_title.get("content") if og_title else "").strip()
         url_text = (og_url.get("content") if og_url else "").strip()
 
-        # Deteksi generic watch redirect tanpa video ID spesifik
         if (
             url_text.rstrip('/') in ("https://www.facebook.com/watch", "https://m.facebook.com/watch")
             or "Discover popular videos" in title_text
@@ -251,7 +249,6 @@ class FacebookScraper:
 
         media_items: List[MediaItem] = []
 
-        # 2. Cek OpenGraph Video spesifik (Paling akurat & 100% bebas media acak!)
         og_video = (
             soup.find("meta", property="og:video")
             or soup.find("meta", property="og:video:url")
@@ -271,7 +268,6 @@ class FacebookScraper:
                 media_items.append(MediaItem(type="VIDEO", url=vid_url, width=w, height=h))
                 return media_items, "SINGLE_VIDEO"
 
-        # 3. Cek Script JSON yang secara spesifik memuat target_id (hanya jika target_id valid)
         if target_id and len(target_id) >= 4 and target_id in html_content:
             for script in soup.find_all("script"):
                 s_txt = script.get_text()
@@ -291,8 +287,6 @@ class FacebookScraper:
                             media_items.append(MediaItem(type="VIDEO", url=clean_u))
                             return media_items, "SINGLE_VIDEO"
 
-        # 4. Deteksi Postingan FOTO / GAMBAR
-        # Cek og:image spesifik dari head
         og_image = (
             soup.find("meta", property="og:image")
             or soup.find("meta", property="og:image:url")
@@ -301,10 +295,10 @@ class FacebookScraper:
         if og_image and og_image.get("content"):
             img_url = self._clean_media_url(og_image["content"])
             if not self._is_static_asset(img_url):
-                # Cari kemungkinan multi-photo jika postingan adalah album foto
+
                 found_images = [img_url]
                 if target_id:
-                    # Cari foto-foto terkait dalam blok target
+
                     photo_matches = re.findall(r'\"image\":\s*\{\"uri\":\s*\"(https:[^\"]+fbcdn\.net[^\"]+)\"', html_content)
                     for pm in photo_matches:
                         clean_pm = self._clean_media_url(pm)
@@ -375,7 +369,6 @@ class FacebookScraper:
                 downloaded_files=[]
             )
 
-            # Download media items via aria2c
             downloaded_paths = []
             tasks = []
             for index, item in enumerate(media_items):
