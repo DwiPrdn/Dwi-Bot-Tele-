@@ -429,6 +429,10 @@ sudo systemctl stop telegram-bot     # Stop bot
 
 ---
 
+Have permission issue? Use sudo python3 main.py for run the bot script
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
