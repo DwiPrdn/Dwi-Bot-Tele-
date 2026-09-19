@@ -1,10 +1,33 @@
 import os, sys, asyncio, json, psutil, platform, subprocess, re, warnings, random, signal
+
+# Cegah Segmentation Fault (exit code 139) di Python 3.13+ akibat modul C cryptg lama
+if sys.version_info >= (3, 13):
+    sys.modules['cryptg'] = None
+
 import socket, urllib.parse, base64, io, edge_tts, shutil, glob, time, hashlib
 from datetime import datetime
 from collections import defaultdict, deque
 from typing import Optional, List, Dict, Any, Union, Tuple
 import aiohttp
-from shazamio import Shazam
+
+# Kompatibilitas Python 3.13+ (audioop di-remove dari stdlib di Python 3.13+)
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*audioop.*")
+try:
+    import audioop
+except ImportError:
+    try:
+        import pyaudioop as audioop
+        sys.modules['audioop'] = audioop
+    except ImportError:
+        pass
+
+try:
+    from shazamio import Shazam
+    HAS_SHAZAM = True
+except Exception:
+    Shazam = None
+    HAS_SHAZAM = False
+
 import logging
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantsAdmins, ChatAdminRights, DocumentAttributeAudio, DocumentAttributeSticker
@@ -1997,23 +2020,24 @@ async def cmd_music(event):
             with open(temp_audio, "rb") as f:
                 audio_b64 = base64.b64encode(f.read()).decode("utf-8")
                 
-            try:
-                shazam = Shazam()
-                hasil_shazam = await shazam.recognize(temp_audio)
-                
-                if hasil_shazam and 'track' in hasil_shazam:
-                    judul = hasil_shazam['track']['title']
-                    artis = hasil_shazam['track']['subtitle']
-                    shazam_answer = f"{judul} {artis}"
+            if HAS_SHAZAM and Shazam:
+                try:
+                    shazam = Shazam()
+                    hasil_shazam = await shazam.recognize(temp_audio)
                     
-                    for f in [raw_media, temp_audio]:
-                        if os.path.exists(f): os.remove(f)
+                    if hasil_shazam and 'track' in hasil_shazam:
+                        judul = hasil_shazam['track']['title']
+                        artis = hasil_shazam['track']['subtitle']
+                        shazam_answer = f"{judul} {artis}"
                         
-                    await msg.edit(f"💡 **Shazam:** `\"{shazam_answer}\"`\n🔍 `Lanjut nyari ke YouTube...`", parse_mode='md')
-                    query = shazam_answer
-                    return await process_music_search(event, msg, uid, query)
-            except Exception as e:
-                logger.error(f"Shazam error, beralih ke Gemini: {e}", exc_info=True)
+                        for f in [raw_media, temp_audio]:
+                            if os.path.exists(f): os.remove(f)
+                            
+                        await msg.edit(f"💡 **Shazam:** `\"{shazam_answer}\"`\n🔍 `Lanjut nyari ke YouTube...`", parse_mode='md')
+                        query = shazam_answer
+                        return await process_music_search(event, msg, uid, query)
+                except Exception as e:
+                    logger.error(f"Shazam error, beralih ke Gemini: {e}", exc_info=True)
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={GEMINI_KEYS[0]}"
             payload = {

@@ -253,7 +253,8 @@ if [ -f "requirements.txt" ]; then
     info "Menginstall pustaka dari requirements.txt ..."
     "$PIP_EXEC" install -r requirements.txt
     if "$PYTHON_EXEC" -c "import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)" 2>/dev/null; then
-        info "Python 3.13+ terdeteksi, memastikan audioop-lts terpasang..."
+        info "Python 3.13+ terdeteksi, membersihkan cryptg (cegah segfault) dan memasang audioop-lts..."
+        "$PIP_EXEC" uninstall -y cryptg 2>/dev/null || true
         "$PIP_EXEC" install audioop-lts 2>/dev/null || true
     fi
     ok "Semua modul Python berhasil dipasang."
@@ -445,7 +446,8 @@ sleep 2
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     # Cek apakah proses python main.py aktif berjalan di sistem
-    PID=$(pgrep -f "main.py" | head -n 1 || true)
+    PID=$(pgrep -u "$(id -u)" -f "main.py" | head -n 1 || true)
+    [ -z "$PID" ] && PID=$(pgrep -f "main.py" | head -n 1 || true)
     if [ -n "$PID" ] && ps -p "$PID" >/dev/null 2>&1; then
         echo -e "\033[1;32m[+] Bot berhasil dijalankan di background (tmux session: '$SESSION')\033[0m"
         echo -e "Perintah kontrol:"
@@ -508,7 +510,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SESSION="bot"
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
-    PID="$(pgrep -f "main.py" | head -n 1 || true)"
+    PID=$(pgrep -u "$(id -u)" -f "main.py" | head -n 1 || true)
+    [ -z "$PID" ] && PID=$(pgrep -f "main.py" | head -n 1 || true)
     if [ -n "$PID" ] && ps -p "$PID" >/dev/null 2>&1; then
         echo -e "\033[1;32m● Status: AKTIF (tmux session '$SESSION')\033[0m"
         echo "  PID: $PID"
