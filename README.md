@@ -284,6 +284,7 @@ When running the bot directly in your server terminal or via tmux, you can manag
 ---
 
 ## Installation & Setup
+(Automatic install still buggy, i dont have time to fix it now, so use manual)
 
 ### Prerequisites
 - **OS**: Linux (Debian, Ubuntu, Arch, Fedora, Alpine, openSUSE, Void), Android Termux, or macOS.
