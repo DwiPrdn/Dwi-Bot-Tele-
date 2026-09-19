@@ -181,7 +181,6 @@ async def upload_to_gofile(
     if result.get("status") != "ok":
         raise RuntimeError(f"Gofile upload gagal: {result}")
 
-    # Emit final completion
     if progress_callback:
         try:
             res = progress_callback(

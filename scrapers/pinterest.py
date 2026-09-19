@@ -107,7 +107,6 @@ def extract_video_url_from_dict(vdata: Any) -> str:
         "v_hlsv4_video_list", "videoListMobile"
     ]
 
-    # Cek apakah vdata memiliki key bersarang seperti videoDataV2
     nested = vdata.get("videoDataV2") or vdata.get("video") or vdata.get("videos")
     search_dicts = [vdata]
     if isinstance(nested, dict):
@@ -342,7 +341,6 @@ class PinterestScraper:
                     if found_img:
                         break
 
-            # Deduplikasi
             seen = set()
             deduped_story = []
             for item in story_items:
@@ -580,7 +578,6 @@ class PinterestScraper:
             )
             stdout, stderr = await proc.communicate()
 
-            # Pastikan nama file cocok
             if not os.path.exists(dest_path):
                 base_no_ext = os.path.splitext(dest_path)[0]
                 for possible in [f"{base_no_ext}.mp4", f"{base_no_ext}.mkv", f"{base_no_ext}.webm"]:
@@ -664,7 +661,7 @@ class PinterestScraper:
             results = await asyncio.gather(*tasks)
             final_downloaded_files = [path for path, success in zip(downloaded_paths, results) if success]
 
-            # Jika unduhan kosong dan tipe media adalah video, coba yt-dlp sekali lagi
+
             if not final_downloaded_files and post_data.media_type in ["SINGLE_VIDEO", "VIDEO"]:
                 fallback_path = os.path.join(self.download_dir, f"pinterest_{post_data.shortcode}_0.mp4")
                 if await self._download_video_ytdlp(canonical_url, fallback_path):

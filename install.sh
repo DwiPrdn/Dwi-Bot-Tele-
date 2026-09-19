@@ -362,6 +362,10 @@ OWNER_ID=${NEW_OWNER_ID}
 GEMINI_KEYS=${NEW_GEMINI_KEYS}
 MODEL_NAME=${NEW_MODEL_NAME}
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 9a802dc09dff03bc9dadbc10c170665afa67fc1d
 # ==========================================
 # Storage & Mirror (Opsional)
 # ==========================================

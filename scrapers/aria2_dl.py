@@ -281,7 +281,6 @@ async def _fallback_smart_stream_download(
                             except Exception:
                                 pass
 
-                # Cek apakah hasil download adalah halaman HTML klik/landing
                 looks_like_html = False
                 try:
                     with open(dest_path, "rb") as f:

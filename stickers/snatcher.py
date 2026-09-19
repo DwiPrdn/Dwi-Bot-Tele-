@@ -156,7 +156,6 @@ class StickerSnatcher:
         credit = f"by @{self.bot_username}" if self.bot_username else ""
         suffix = f"#{pack_num} {credit}".strip()
 
-        # Batas judul stiker Telegram adalah 64 karakter
         overhead = len(f"'s {type_str} {suffix}")
         max_name_len = max(5, 64 - overhead)
         if len(clean_name) > max_name_len:
@@ -196,7 +195,6 @@ class StickerSnatcher:
         if not os.path.exists(input_path):
             return None, "File input tidak ditemukan."
 
-        # Deteksi resolusi awal dan apakah merupakan video/animasi
         w, h = 512, 512
         is_video = False
         try:
@@ -220,13 +218,13 @@ class StickerSnatcher:
         if ext in ['mp4', 'mov', 'webm', 'mkv', 'gif', 'avi', 'flv', 'wmv']:
             is_video = True
         elif ext in ['webp', 'png']:
-            # Cek apakah file webp atau png adalah animasi (live stiker Telegram)
+
             try:
                 from PIL import Image
                 with Image.open(input_path) as im:
                     if getattr(im, 'is_animated', False) and getattr(im, 'n_frames', 1) > 1:
                         is_video = True
-                        # Ekstrak frame animated webp ke gif sementara agar terbaca sempurna oleh ffmpeg
+
                         temp_anim_input = os.path.join(self.temp_dir, f"temp_anim_{user_id}_{int(time.time()*1000)}.gif")
                         frames = []
                         durations = []
@@ -255,7 +253,6 @@ class StickerSnatcher:
             except Exception:
                 pass
 
-        # Hitung dimensi genap: salah satu sisi 512px, sisi lainnya genap <= 512px
         if w >= h:
             tw = 512
             th = int(round(512 * h / max(1, w)))
@@ -274,11 +271,10 @@ class StickerSnatcher:
 
         actual_input = temp_anim_input if (temp_anim_input and os.path.exists(temp_anim_input)) else input_path
 
-        # Batas maksimum resmi Telegram untuk video stiker (live stiker) adalah 3.0 detik
         MAX_STICKER_DURATION = "3.0"
 
         if not is_video:
-            # Media statis (foto/gambar): loop durasi penuh 3.0 detik WebM VP9 yuva420p
+
             cmd = [
                 "ffmpeg", "-y",
                 "-loop", "1", "-i", actual_input,
@@ -291,7 +287,7 @@ class StickerSnatcher:
                 output_file
             ]
         else:
-            # Media bergerak (video/GIF/live stiker): tepat durasi maksimum yang ditetapkan Telegram (3.0 detik)
+
             cmd = ["ffmpeg", "-y"]
             if start_offset > 0:
                 cmd.extend(["-ss", str(start_offset)])
@@ -312,7 +308,7 @@ class StickerSnatcher:
             proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             _, stderr = await proc.communicate()
             if proc.returncode == 0 and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-                # Pastikan tidak melebihi batas Telegram 256KB
+
                 if os.path.getsize(output_file) > 256 * 1024:
                     for target_br in ["120k", "90k", "60k", "40k"]:
                         lower_out = os.path.join(self.temp_dir, f"{out_name}_low.webm")
@@ -381,7 +377,7 @@ class StickerSnatcher:
                 sticker_set, not_found = await self.get_sticker_set(pack_name)
 
                 if not_found:
-                    # Pack belum ada sama sekali di Telegram, buat pack baru dengan username bot sebagai kredit!
+
                     ok = await self.create_new_sticker_set(user_id, pack_name, expected_title, file_id, emoji, sticker_format)
                     if ok:
                         chosen_pack_name = pack_name
@@ -391,10 +387,10 @@ class StickerSnatcher:
                     else:
                         return False, "Gagal membuat sticker pack baru.", "", ""
                 elif sticker_set is None:
-                    # Terjadi kegagalan koneksi ke API Telegram saat memeriksa pack
+
                     return False, "Gagal menghubungi Telegram untuk memeriksa status sticker pack.", "", ""
                 else:
-                    # Pack sudah ada, sinkronkan title jika nama akun / kredit bot belum sesuai
+
                     curr_title = sticker_set.get('title', '')
                     if curr_title != expected_title:
                         await self.set_sticker_set_title(pack_name, expected_title)
@@ -402,7 +398,6 @@ class StickerSnatcher:
                     else:
                         chosen_pack_title = curr_title or expected_title
 
-                    # Cek apakah masih muat (< 120 stiker)
                     stickers = sticker_set.get('stickers', [])
                     if len(stickers) < 120:
                         ok = await self.add_sticker_to_set(user_id, pack_name, file_id, emoji, sticker_format)
@@ -413,7 +408,6 @@ class StickerSnatcher:
                         else:
                             return False, "Gagal menambahkan stiker ke pack yang ada.", "", ""
                     else:
-                        # Pack sudah mencapai batas 120 stiker, lanjut ke volume berikutnya
                         pack_num += 1
 
             if not chosen_pack_name:
@@ -422,7 +416,7 @@ class StickerSnatcher:
             return True, chosen_pack_name, pack_url, chosen_pack_title
 
         finally:
-            # Bersihkan file sementara konversi
+
             if converted_file and os.path.exists(converted_file):
                 try:
                     os.remove(converted_file)

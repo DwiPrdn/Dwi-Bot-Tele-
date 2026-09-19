@@ -37,7 +37,6 @@ from racing.racing_service import RacingService
 from racing.renderer import render_racing_card
 from admins.moderation import register_moderation
 from admins.verify import register_verify, handle_verify_deeplink, verify_timeout_loop
-# Pastikan encoding I/O terminal selalu UTF-8 dengan error replacement agar emoji & karakter khusus tidak crash
 for _stream in [sys.stdin, sys.stdout, sys.stderr]:
     if hasattr(_stream, 'reconfigure'):
         try:
@@ -45,7 +44,6 @@ for _stream in [sys.stdin, sys.stdout, sys.stderr]:
         except Exception:
             pass
 
-# Pastikan module di ~/.local terdeteksi (termasuk jika dijalankan via sudo)
 _user_site = os.path.expanduser('~/.local/lib/python3.12/site-packages')
 if os.path.exists(_user_site) and _user_site not in sys.path:
     sys.path.insert(0, _user_site)
@@ -81,7 +79,6 @@ except ImportError:
                         os.environ[_k] = _v
 
 # --- [CONFIG] ---
-# Semua kredensial dan API keys dibaca murni dari file .env (tanpa hardcoded keys)
 API_ID = int(os.getenv("API_ID") or 0)
 API_HASH = os.getenv("API_HASH", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
@@ -94,9 +91,7 @@ sticker_snatcher = StickerSnatcher(bot_token=BOT_TOKEN, bot_username=BOT_USERNAM
 _raw_gemini_keys = os.getenv("GEMINI_KEYS", "")
 GEMINI_KEYS = [k.strip() for k in _raw_gemini_keys.split(",") if k.strip()]
 
-GROQ_KEY = os.getenv("GROQ_KEY", "")
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3.5-flash-lite")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3-32b")
 
 # --- [ MIRROR (Gofile) ] ---
 GOFILE_TOKEN = os.getenv("GOFILE_TOKEN", "")
@@ -128,8 +123,8 @@ DB_VERIFY_PENDING = f"{DBBOT}db_chat/verify_pending.json"
 DB_CACHE_DOWNLOAD = f"{DBBOT}db_user/cache_download.json"
 DB_KNOWN_CHATS = f"{DBBOT}db_user/known_chats.json"
 DB_CHAT_SESSIONS = f"{DBBOT}db_user/chat_sessions.json"
-relay_msg_map_u2o = {}  # user_msg_id -> owner_msg_id
-relay_msg_map_o2u = {}  # owner_msg_id -> user_msg_id
+relay_msg_map_u2o = {}  
+relay_msg_map_o2u = {}  
 
 LOG_DIR = f"{BASE_PATH}/dbbot/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -556,7 +551,7 @@ async def get_image_b64(event, status_msg=None):
             elif file_lower.endswith(".pdf"): mime_type = "application/pdf"
 
             actual_size = os.path.getsize(file_path)
-            # Jika stiker (<= 15MB): selalu gunakan base64 inlineData, jangan pernah ke File API
+            
             is_sticker_media = bool(getattr(target_msg, 'sticker', None))
             if not is_sticker_media and getattr(target_msg, 'document', None):
                 is_sticker_media = any(isinstance(a, DocumentAttributeSticker) for a in getattr(target_msg.document, 'attributes', []))
@@ -568,11 +563,10 @@ async def get_image_b64(event, status_msg=None):
                 except: pass
                 return img_data, mime_type, None
 
-            # Jika video nyata atau ukuran > 15MB: simpan file di disk untuk diunggah via Gemini File API
+            
             if is_video or actual_size > 15 * 1024 * 1024 or mime_type.startswith("video/"):
                 return None, mime_type, file_path
 
-            # Jika gambar kecil (<= 15MB): gunakan base64 inlineData
             with open(file_path, "rb") as f:
                 img_data = base64.b64encode(f.read()).decode('utf-8')
             try: os.remove(file_path)
@@ -940,7 +934,6 @@ async def cmd_chatowner(event):
             parse_mode='html'
         )
 
-    # Catat permintaan pending
     sender = await event.get_sender()
     first_name = getattr(sender, 'first_name', '') or 'Pengguna'
     last_name = getattr(sender, 'last_name', '') or ''
@@ -955,7 +948,6 @@ async def cmd_chatowner(event):
     sessions["pending_requests"] = pending_requests
     save_db(DB_CHAT_SESSIONS, sessions)
 
-    # Kirim respons ke pengguna
     await event.reply(
         "📨 <b>Permintaan Chat Terkirim ke Owner!</b>\n\n"
         "Pesan yang kamu kirim saat ini akan terkirim ke Owner setelah disetujui.\n"
@@ -964,7 +956,6 @@ async def cmd_chatowner(event):
         parse_mode='html'
     )
 
-    # Kirim permintaan persetujuan ke Owner
     user_link = f"<a href='tg://user?id={uid}'>{html.escape(full_name)}</a>"
     u_info = f"@{username}" if username else "Tidak ada username"
     owner_text = (
@@ -1095,14 +1086,12 @@ async def cmd_stopchat(event):
     active_user = sessions.get("active_user")
     pending_requests = sessions.get("pending_requests", {})
 
-    # Jika membatalkan permintaan pending
     if str(uid) in pending_requests:
         pending_requests.pop(str(uid), None)
         sessions["pending_requests"] = pending_requests
         save_db(DB_CHAT_SESSIONS, sessions)
         return await event.reply("✅ Permintaan chat dengan Owner telah dibatalkan.")
 
-    # Jika Owner mengakhiri sesi chat
     if uid == OWNER_ID:
         if not active_user:
             return await event.reply("ℹ️ Tidak ada sesi chat yang sedang aktif saat ini.")
@@ -1122,7 +1111,6 @@ async def cmd_stopchat(event):
             pass
         return
 
-    # Jika User mengakhiri sesi chat
     if active_user == uid:
         sessions["active_user"] = None
         save_db(DB_CHAT_SESSIONS, sessions)
@@ -1156,11 +1144,10 @@ async def chatowner_mirror_relay(event):
 
     uid = event.sender_id
 
-    # 1. Pesan dari User yang sedang aktif -> Diteruskan / di-mirror ke Owner
     if uid == active_user:
         text_raw = (event.raw_text or "").strip()
         if re.match(r'^[/!](stopchat|endchat)(?:@\w+)?$', text_raw, re.I):
-            return  # Biarkan cmd_stopchat yang mengeksekusi
+            return
 
         replied = await event.get_reply_message() if event.is_reply else None
         reply_to_owner = relay_msg_map_u2o.get(replied.id) if replied else None
@@ -1186,15 +1173,13 @@ async def chatowner_mirror_relay(event):
 
         raise events.StopPropagation
 
-    # 2. Pesan dari Owner -> Di-mirror ke User yang sedang aktif
     elif uid == OWNER_ID:
         text_raw = (event.raw_text or "").strip()
-        # Jika berupa perintah bot yang diawali simbol, jangan mirror (biarkan bot mengeksekusi fiturnya)
         if text_raw.startswith(('/', '.', '!')):
             first_word = text_raw.split()[0].lower()
             if first_word in ["/stopchat", "/endchat", ".stopchat", ".endchat"]:
-                return  # Biarkan cmd_stopchat yang menangani
-            return  # Perintah admin/bot lainnya, biarkan bot merespons perintah owner
+                return  
+            return  
 
         replied = await event.get_reply_message() if event.is_reply else None
         reply_to_user = relay_msg_map_o2u.get(replied.id) if replied else None
@@ -1245,10 +1230,8 @@ async def cmd_update(event):
     except Exception as e:
         logger.error(f"Error saving restart state: {e}")
 
-    # Beri jeda singkat agar pesan balasan terkirim ke Telegram sebelum proses diganti
     await asyncio.sleep(1)
 
-    # Gantikan proses python saat ini secara in-place dengan absolute path
     script_path = os.path.abspath(__file__)
     os.chdir(os.path.dirname(script_path))
     os.execv(sys.executable, [sys.executable, script_path] + sys.argv[1:])
@@ -1632,10 +1615,8 @@ async def download_and_send_youtube_audio(event, msg, uid, url):
             raw_title = meta.get("track") or meta.get("title") or base_name
             raw_artist = meta.get("artist") or meta.get("uploader") or meta.get("channel") or ""
 
-            # Bersihkan suffix seperti (Official Video), [Official Audio], dll.
             clean_t = re.sub(r'[\(\[](?:official\s*(?:music\s*)?(?:video|audio|mv|lyric|lyrics)|lyrics?|audio|video|visualizer)[\)\]]', '', raw_title, flags=re.IGNORECASE).strip()
 
-            # Pisahkan jika ada pemisah Artist - Title
             if " - " in clean_t:
                 parts = clean_t.split(" - ", 1)
                 artist_cand, title_cand = parts[0].strip(), parts[1].strip()
@@ -1853,7 +1834,6 @@ async def execute_music_download_with_fallback(msg, uid: int, query: str, start_
     os.makedirs(dl_dir, exist_ok=True)
 
     try:
-        # 1. Platform Spotify
         if start_platform == "spotify":
             try:
                 await msg.edit(f"🟢 `Mencari & mengunduh '{query}' via Spotify...`", buttons=None, parse_mode='md')
@@ -1895,13 +1875,11 @@ async def execute_music_download_with_fallback(msg, uid: int, query: str, start_
                 await msg.delete()
                 return
 
-            # Spotify gagal -> lanjut fallback ke SoundCloud
             try:
                 await msg.edit(f"⚠️ `Spotify gagal menemukan lagu. Mencoba SoundCloud...`", buttons=None, parse_mode='md')
             except Exception: pass
             start_platform = "soundcloud"
 
-        # 2. Platform SoundCloud
         if start_platform == "soundcloud":
             try:
                 await msg.edit(f"🟠 `Mencari & mengunduh '{query}' via SoundCloud...`", buttons=None, parse_mode='md')
@@ -1942,13 +1920,11 @@ async def execute_music_download_with_fallback(msg, uid: int, query: str, start_
                 await msg.delete()
                 return
 
-            # SoundCloud gagal -> lanjut fallback ke YouTube
             try:
                 await msg.edit(f"⚠️ `SoundCloud gagal menemukan lagu. Mencoba YouTube...`", buttons=None, parse_mode='md')
             except Exception: pass
             start_platform = "youtube"
 
-        # 3. Platform YouTube (Fallback terakhir)
         if start_platform == "youtube":
             try:
                 await msg.edit(f"🔴 `Mencari & mengunduh '{query}' via YouTube...`", buttons=None, parse_mode='md')
@@ -2073,7 +2049,6 @@ async def cmd_music(event):
                 if os.path.exists(f): os.remove(f)
             return await msg.edit(f"❌ `Error sistem Ngab: {str(e)}`")
 
-    # Deteksi tautan musik (Spotify / SoundCloud / YouTube / Link bebas) di argumen atau pesan reply
     url_candidate = ""
     m_url = re.search(r'((?:https?://)?(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?)', raw_arg)
     if m_url:
@@ -2360,11 +2335,9 @@ async def cb_dlmusic(event):
             if not raw_artist:
                 raw_artist = artis_tele
 
-            # Clean junk suffixes
             clean_t = re.sub(r'(?i)\s*[\(\[\{]?(?:official\s*(?:music\s*)?video|official\s*audio|lyric\s*video|audio|video|lyrics|hd|4k|hq|remastered|visualizer)[\)\]\}]?', '', raw_title).strip()
             clean_t = re.sub(r'[\(\[\{]\s*[\)\]\}]', '', clean_t).strip()
 
-            # Pisahkan jika ada pemisah Artist - Title
             if " - " in clean_t:
                 parts = clean_t.split(" - ", 1)
                 artist_cand, title_cand = parts[0].strip(), parts[1].strip()
@@ -2426,7 +2399,6 @@ async def universal_downloader_handler(event):
     reply = await event.get_reply_message()
     if reply and reply.sender_id == (await app.get_me()).id: return
 
-    # Abaikan jika pesan diawali perintah /kang, /snatch, atau /msc
     text_clean = event.text.strip().lower()
     first_token = text_clean.split()[0] if text_clean.split() else ""
     if re.match(r"^[/!](?:kang|snatch|msc)(?:@\w+)?$", first_token):
@@ -2543,8 +2515,6 @@ async def universal_downloader_handler(event):
                         )
                         sent_msgs_all.append(sent_msg)
                     else:
-                        # Telegram cuma bisa 10 item per album/pesan, jadi dipecah
-                        # per 10 biar postingan >10 foto/video ga kepotong lagi.
                         for chunk_start in range(0, len(thread_files), 10):
                             chunk = thread_files[chunk_start:chunk_start + 10]
                             sent_chunk = await app.send_file(
@@ -4099,7 +4069,6 @@ async def cmd_aigm(event):
     
     image_b64, mime_type, local_file = await get_image_b64(event, status_msg=msg)
 
-    # Deteksi apakah target adalah stiker
     reply_msg = await event.get_reply_message() if event.is_reply else None
     target_msg = event if (event.photo or event.document) else reply_msg
     is_sticker = False
@@ -4233,7 +4202,6 @@ async def ai_simple_reply(event):
             except: pass
             return
         
-        # Deteksi apakah pesan ini adalah stiker
         is_sticker = bool(getattr(event, 'sticker', None))
         if not is_sticker and event.document:
             is_sticker = any(isinstance(a, DocumentAttributeSticker) for a in getattr(event.document, 'attributes', []))
@@ -4400,7 +4368,6 @@ async def cmd_asupan(event):
     db = load_db(DB_ASUPAN)
     tag = query.lower() if query else db.get(str(uid), "waifu")
 
-    # Bersihkan sesi lama jika ada
     if uid in ASUPAN_SESSIONS:
         old_session = ASUPAN_SESSIONS[uid]
         old_folder = old_session.get("download_folder")
@@ -4427,7 +4394,6 @@ async def cmd_asupan(event):
     status_msg = await event.reply(f"⏳ `Menyelami Reddit nyari asupan video ({tag})...`", parse_mode='md')
 
     try:
-        # 1. Cari kandidat postingan video
         candidates = await RedditScraper.search_video_posts(tag, limit=35)
         if not candidates:
             await status_msg.edit(f"❌ Tidak ditemukan video Reddit untuk tag `{tag}`. Coba tag/keyword lain ya Ngab!", parse_mode='md')
@@ -4435,7 +4401,6 @@ async def cmd_asupan(event):
 
         session["candidate_posts"] = candidates
 
-        # 2. Unduh dan pre-upload Video 1 terlebih dahulu (ambil yang paling cepat selesai)
         first_item = None
         probe_targets = candidates[:3]
         for t in probe_targets:
@@ -4453,7 +4418,6 @@ async def cmd_asupan(event):
             await status_msg.edit(f"❌ Gagal memuat video pertama untuk tag `{tag}`. Coba lagi beberapa saat lagi ya Ngab!", parse_mode='md')
             return
 
-        # 3. Langsung kirim Video 1 ke chat
         total_display = 5
         caption_text = (
             f"✨ <b>Asupan Reddit {tag.capitalize()}</b> [1/{total_display}]\n\n"
@@ -4478,7 +4442,6 @@ async def cmd_asupan(event):
         session["last_msg_id"] = sent_msg.id
         await status_msg.delete()
 
-        # 4. Unduh & pre-upload 4 video berikutnya di background secara paralel
         asyncio.create_task(fetch_asupan_batch(uid, tag, session, count=4))
 
     except Exception as e:
@@ -4507,7 +4470,6 @@ async def _download_and_preupload_one(cand: dict, download_folder: str) -> Optio
         local_file = vid_files[0]
         uploaded_handle = None
         try:
-            # Turbo multi-worker upload langsung ke Telegram
             uploaded_handle = await fast_telethon.fast_upload(app, local_file, workers=8)
             try:
                 os.remove(local_file)
@@ -4546,7 +4508,6 @@ async def fetch_asupan_batch(uid: int, tag: str, session: dict, count: int = 4) 
 
     seen = session.setdefault("seen_urls", set())
 
-    # Cari kandidat postingan video jika belum ada atau sudah mau habis
     video_posts = session.get("candidate_posts", [])
     unseen = [p for p in video_posts if p['url'] not in seen]
     if not video_posts or len(unseen) < count:
@@ -4570,7 +4531,7 @@ async def fetch_asupan_batch(uid: int, tag: str, session: dict, count: int = 4) 
         seen.add(t['url'])
 
     added = 0
-    # Proses secara PARALEL dengan as_completed agar item yang selesai langsung masuk queue
+
     tasks = [_download_and_preupload_one(t, download_folder) for t in targets]
     for coro in asyncio.as_completed(tasks):
         item = await coro
@@ -4603,14 +4564,12 @@ async def cb_asupan_next(event):
     session["last_next_time"] = now
     session["next_count"] = session.get("next_count", 0) + 1
 
-    # Setelah tombol ditekan 4 kali / mendekati akhir antrean, unduh batch 5 video baru di background
     if (session["next_count"] % 4 == 0 or len(session["queue"]) - session["current_idx"] <= 2) and not session.get("is_fetching"):
         logger.info(f"[Asupan] Pre-fetching 5 more videos in background for user {owner_uid}...")
         asyncio.create_task(fetch_asupan_batch(owner_uid, session["tag"], session, count=5))
 
     next_idx = session["current_idx"] + 1
 
-    # Jika antrean berikutnya belum selesai diunduh di background, tunggu beberapa detik
     if next_idx >= len(session["queue"]):
         if session.get("is_fetching"):
             await event.answer("⏳ Menyiapkan video berikutnya, tunggu sebentar...", alert=False)
@@ -4637,7 +4596,6 @@ async def cb_asupan_next(event):
         [Button.inline("⏭️ Next", data=f"asupan_next_{owner_uid}".encode('utf-8'))]
     ]
 
-    # Kirim video baru menggunakan pre-uploaded handle untuk kecepatan kilat (instan < 0.3s)
     file_payload = item.get("uploaded_handle")
     if not file_payload:
         if os.path.exists(item.get("file", "")):
@@ -4654,7 +4612,6 @@ async def cb_asupan_next(event):
         supports_streaming=True
     )
 
-    # Mekanisme switch instan: Hapus pesan video lama
     try:
         await event.delete()
     except Exception:
@@ -4666,7 +4623,6 @@ async def cb_asupan_next(event):
 
     session["last_msg_id"] = sent_msg.id
 
-    # Hapus file lokal jika masih ada
     try:
         if item.get("file") and os.path.exists(item["file"]):
             os.remove(item["file"])
@@ -5472,12 +5428,10 @@ current_chat = {
     "unread": 0
 }
 terminal_config = {
-    "notif_enabled": True,       # Otomatis tampilkan notifikasi pesan masuk di terminal (PM & Grup)
+    "notif_enabled": True,
 }
-# In-memory message history buffer (RAM saja, tanpa sentuh database)
-# cid_str -> deque of dicts: {"id": msg_id, "sender": sname, "content": text, "date": "HH:MM"}
 chat_memory_history = defaultdict(lambda: deque(maxlen=100))
-dialogs_cache = []  # list of (chat_id_str, info_dict), diisi tiap kali /list dipanggil
+dialogs_cache = []
 
 known_chats = load_db(DB_KNOWN_CHATS, default_type=dict)
 
@@ -5620,7 +5574,6 @@ def _format_media_summary(msg_obj):
 
 @app.on(events.NewMessage())
 async def _terminal_incoming_tracker(event):
-    # Jangan proses pesan yang dikirim oleh bot sendiri
     if event.sender_id == BOT_ID:
         return
 
@@ -5639,7 +5592,6 @@ async def _terminal_incoming_tracker(event):
         content = " ".join(summary_parts) if summary_parts else "[Pesan Tanpa Teks]"
         date_str = event.date.strftime("%H:%M") if getattr(event, 'date', None) else datetime.now().strftime("%H:%M")
 
-        # Catat ke in-memory history (RAM) tanpa sentuh database
         chat_memory_history[str(cid)].append({
             "id": event.id,
             "sender": sname,
@@ -5730,7 +5682,6 @@ async def open_group(target):
     current_chat["unread"] = 0
     print_tree_item("\033[32m🟢\033[0m", "Open", f"{cname} · {cid}", "Connected. Ketik pesan untuk kirim, /read untuk riwayat, /close untuk keluar.")
 
-    # Tampilkan preview 3 pesan terakhir (in-memory buffer / get_messages)
     cid_str = str(cid)
     preview_shown = False
     try:
@@ -5775,7 +5726,6 @@ def _try_extract_file_path(line):
     if clean_line.startswith(("/send ", "/file ", "/media ")):
         clean_line = clean_line.split(" ", 1)[1].strip()
 
-    # Cek format path dalam tanda kutip
     if clean_line.startswith(('"', "'")):
         q = clean_line[0]
         end_q = clean_line.find(q, 1)
@@ -5786,7 +5736,6 @@ def _try_extract_file_path(line):
                 caption = clean_line[end_q + 1:].strip()
                 return os.path.abspath(exp_path), caption
 
-    # Cek token spasi terpanjang ke terpendek
     tokens = clean_line.split(' ')
     for i in range(len(tokens), 0, -1):
         candidate = ' '.join(tokens[:i]).strip('\'"')
@@ -6181,7 +6130,6 @@ async def cmd_mirror(event):
 
                 dl_result = await aria2_download_smart(resolved_url, local_dir, headers=req_headers, progress_callback=on_download_progress)
 
-            # Recovery mechanism: jika hasil download berupa file HTML (misal landing page/click-through), coba ekstrak link unduhan biner langsung
             if dl_result.get("looks_like_html") and dl_result.get("file_path") and os.path.exists(dl_result["file_path"]):
                 recovered_url = None
                 try:
@@ -6318,7 +6266,6 @@ async def download_social_media_for_snatch(url: str, download_folder: str) -> Li
     except Exception as e:
         logger.error(f"[SnatchDL] Gagal scrape tautan {url}: {e}", exc_info=True)
 
-    # Filter hanya file yang eksis dan ukurannya valid (>0)
     valid_files = [f for f in files if os.path.exists(f) and os.path.getsize(f) > 0]
     return valid_files
 
@@ -6339,7 +6286,6 @@ async def cmd_snatch(event):
     arg = (event.pattern_match.group(1) or "").strip()
     reply = await event.get_reply_message()
 
-    # Ekstrak emoji pilihan, URL, atau offset waktu dari argumen
     emoji = "✨"
     url_candidate = ""
     start_offset = 0.0
@@ -6363,7 +6309,6 @@ async def cmd_snatch(event):
         elif any(ord(char) > 127 for char in tok):
             emoji = tok
 
-    # Cek jika tautan media sosial ada di reply message
     if not url_candidate and reply and reply.text:
         m_url = re.search(r'(https?://[^\s]+)', reply.text)
         if m_url:
@@ -6390,7 +6335,6 @@ async def cmd_snatch(event):
             shutil.rmtree(download_folder, ignore_errors=True)
             return
 
-        # Jika hanya 1 file ditemukan: langsung masukkan ke pack
         if len(files) == 1:
             await status_msg.edit("🎨 `Mengonversi media ke format stiker Telegram...`", parse_mode='md')
             ok, pack_name, pack_url, pack_title = await sticker_snatcher.snatch_to_pack(uid, user_name, files[0], emoji=emoji, start_offset=start_offset)
@@ -6410,7 +6354,6 @@ async def cmd_snatch(event):
                 await status_msg.edit(f"❌ <b>Gagal menambahkan stiker:</b>\n<code>{html.escape(pack_name)}</code>", parse_mode='html')
             return
 
-        # Jika multimedia terdeteksi (> 1 item): berikan antarmuka pemilihan interaktif
         session_id = f"{uid}_{int(time.time())}"
         SNATCH_SESSIONS[session_id] = {
             "user_id": uid,
@@ -6423,7 +6366,6 @@ async def cmd_snatch(event):
             "created_at": time.time()
         }
 
-        # Susun keyboard inline: item 1..N (maks 3 per baris)
         item_buttons = []
         row = []
         for i in range(len(files)):
@@ -6593,7 +6535,6 @@ async def cb_snatch_all(event):
             last_pack_url = pack_url
             last_pack_title = pack_title
 
-    # Bersihkan folder download sementara
     if os.path.exists(session["folder"]):
         shutil.rmtree(session["folder"], ignore_errors=True)
     SNATCH_SESSIONS.pop(session_id, None)
@@ -6902,7 +6843,6 @@ async def cb_racing_switch(event):
 
     try:
         chat_id = event.chat_id
-        # Kirim grafik baru lalu hapus pesan lama untuk pergantian visual yang mulus
         await app.send_file(
             chat_id,
             file=img_path,
@@ -6923,7 +6863,6 @@ async def cb_racing_switch(event):
 
 def get_latest_changelog_for_restart() -> Optional[str]:
     """Mengambil changelog pembaruan fitur baru untuk ditampilkan saat restart."""
-    # 1. Cek file pending changelog spesifik
     if os.path.exists(PENDING_CHANGELOG_FILE):
         try:
             with open(PENDING_CHANGELOG_FILE, "r", encoding="utf-8") as f:
@@ -6944,7 +6883,6 @@ def get_latest_changelog_for_restart() -> Optional[str]:
         except Exception as e:
             logger.warning(f"Error reading PENDING_CHANGELOG_FILE: {e}")
 
-    # 2. Cek apakah file CHANGELOG.md memiliki update baru (berdasarkan hash)
     if os.path.exists(CHANGELOG_FILE):
         try:
             with open(CHANGELOG_FILE, "rb") as cf:
@@ -6991,7 +6929,6 @@ async def check_restart_notification():
         with open(UPDATE_STATE_FILE, "r") as f:
             content = f.read().strip()
 
-        # Segera hapus file state agar tidak pernah terkirim dua kali
         try:
             os.remove(UPDATE_STATE_FILE)
         except Exception:
@@ -7000,7 +6937,6 @@ async def check_restart_notification():
         if not content:
             return
 
-        # Beri jeda 2 detik agar koneksi MTProto stabil
         await asyncio.sleep(2)
 
         chat_id = None
