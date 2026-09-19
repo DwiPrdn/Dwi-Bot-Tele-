@@ -237,7 +237,7 @@ else
     if [[ "$USE_VENV" =~ ^[Yy]$ ]]; then
         if [ ! -d "venv" ]; then
             info "Membuat virtual environment di ./venv ..."
-            python3 -m venv venv || virtualenv venv
+            python3 -m venv --system-site-packages venv 2>/dev/null || python3 -m venv venv || virtualenv venv
         fi
         PYTHON_EXEC="$ROOT_DIR/venv/bin/python3"
         PIP_EXEC="$ROOT_DIR/venv/bin/pip"
@@ -246,7 +246,7 @@ else
         PYTHON_EXEC="$(command -v python3 || command -v python)"
         PIP_EXEC="$(command -v pip3 || command -v pip)"
     fi
-    "$PIP_EXEC" install --upgrade pip setuptools wheel
+    "$PIP_EXEC" install --upgrade pip setuptools wheel 2>/dev/null || true
 fi
 
 if [ -f "requirements.txt" ]; then
@@ -362,10 +362,6 @@ OWNER_ID=${NEW_OWNER_ID}
 GEMINI_KEYS=${NEW_GEMINI_KEYS}
 MODEL_NAME=${NEW_MODEL_NAME}
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 9a802dc09dff03bc9dadbc10c170665afa67fc1d
 # ==========================================
 # Storage & Mirror (Opsional)
 # ==========================================
@@ -382,46 +378,72 @@ header "Manajemen Eksekusi Bot"
 create_tmux_scripts() {
     info "Membuat script runner tmux (start.sh, stop.sh, restart.sh, status.sh, attach.sh)..."
 
-    cat <<EOF > start.sh
+    cat <<'EOF' > start.sh
 #!/usr/bin/env bash
 set -e
 
-DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-cd "\$DIR"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR"
 
 SESSION="bot"
 
-if tmux has-session -t "\$SESSION" 2>/dev/null; then
-    echo -e "\033[1;33m[!] Sesi tmux '\$SESSION' sudah berjalan.\033[0m"
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo -e "\033[1;33m[!] Sesi tmux '$SESSION' sudah berjalan.\033[0m"
     echo -e "Gunakan \033[1;36m./attach.sh\033[0m untuk melihat konsol atau \033[1;31m./stop.sh\033[0m untuk mematikan."
     exit 0
 fi
 
-# Cari interpreter Python yang valid
-if [ -f "\$DIR/venv/bin/python3" ]; then
-    PY="\$DIR/venv/bin/python3"
-elif [ -n "${PYTHON_EXEC}" ] && [ -x "${PYTHON_EXEC}" ]; then
-    PY="${PYTHON_EXEC}"
+# Fungsi pengecekan apakah interpreter Python bisa import telethon
+can_run_bot() {
+    local candidate="$1"
+    [ -n "$candidate" ] && [ -x "$candidate" ] && "$candidate" -c "import telethon" >/dev/null 2>&1
+}
+
+# Prioritas pencarian interpreter Python:
+# 1. Virtualenv lokal jika valid dan modul terinstall
+# 2. python3 sistem
+# 3. /usr/bin/python3
+# 4. python
+PY=""
+if can_run_bot "$DIR/venv/bin/python3"; then
+    PY="$DIR/venv/bin/python3"
+elif can_run_bot "$(command -v python3 2>/dev/null)"; then
+    PY="$(command -v python3)"
+elif can_run_bot "/usr/bin/python3"; then
+    PY="/usr/bin/python3"
+elif can_run_bot "$(command -v python 2>/dev/null)"; then
+    PY="$(command -v python)"
+elif [ -f "$DIR/venv/bin/python3" ]; then
+    PY="$DIR/venv/bin/python3"
 elif command -v python3 >/dev/null 2>&1; then
-    PY="\$(command -v python3)"
-elif command -v python >/dev/null 2>&1; then
-    PY="\$(command -v python)"
+    PY="$(command -v python3)"
 else
-    echo -e "\033[1;31m[-] Interpreter Python tidak ditemukan!\033[0m"
+    PY="$(command -v python || true)"
+fi
+
+if [ -z "$PY" ] || ! command -v "$PY" >/dev/null 2>&1; then
+    echo -e "\033[1;31m[-] Interpreter Python tidak ditemukan di sistem!\033[0m"
     exit 1
 fi
 
-mkdir -p "\$DIR/dbbot/logs" "\$DIR/scrapers/logs"
+if ! can_run_bot "$PY"; then
+    echo -e "\033[1;33m[!] Peringatan: Pustaka 'telethon' belum terpasang pada $PY.\033[0m"
+    echo -e "    Mencoba memasang dependensi dari requirements.txt..."
+    "$PY" -m pip install -r requirements.txt || true
+fi
+
+mkdir -p "$DIR/dbbot/logs" "$DIR/scrapers/logs"
 
 # Jalankan bot di dalam sesi tmux dengan penahan error agar traceback tidak hilang
-tmux new-session -d -s "\$SESSION" -c "\$DIR" "bash -c '\$PY main.py; EXIT_CODE=\\\$?; if [ \\\$EXIT_CODE -ne 0 ]; then echo -e \"\n\033[1;31m[!] Bot berhenti dengan error (exit code: \\\$EXIT_CODE).\033[0m\"; echo \"Tekan Enter untuk menutup sesi...\"; read -r; fi'"
+tmux new-session -d -s "$SESSION" -c "$DIR" "bash -c '$PY main.py; EXIT_CODE=\$?; if [ \$EXIT_CODE -ne 0 ]; then echo -e \"\n\033[1;31m[!] Bot berhenti dengan error (exit code: \$EXIT_CODE).\033[0m\"; echo \"Tekan Enter untuk menutup sesi...\"; read -r; fi'"
 
-sleep 1.5
+sleep 2
 
-if tmux has-session -t "\$SESSION" 2>/dev/null; then
-    # Cek apakah proses main.py benar-benar aktif berjalan
-    if pgrep -f "main.py" >/dev/null 2>&1; then
-        echo -e "\033[1;32m[+] Bot berhasil dijalankan di background (tmux session: '\$SESSION')\033[0m"
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+    # Cek apakah proses python main.py aktif berjalan di sistem
+    PID=$(pgrep -f "main.py" | head -n 1 || true)
+    if [ -n "$PID" ] && ps -p "$PID" >/dev/null 2>&1; then
+        echo -e "\033[1;32m[+] Bot berhasil dijalankan di background (tmux session: '$SESSION')\033[0m"
         echo -e "Perintah kontrol:"
         echo -e "  \033[1;36m./attach.sh\033[0m  - Buka konsol interaktif bot"
         echo -e "  \033[1;36m./status.sh\033[0m  - Cek status & log terbaru"
@@ -429,14 +451,14 @@ if tmux has-session -t "\$SESSION" 2>/dev/null; then
         echo -e "  \033[1;36m./stop.sh\033[0m    - Hentikan bot"
     else
         echo -e "\033[1;31m[-] Bot mengalami error saat startup!\033[0m"
-        echo -e "\033[1;33m--- Output Terminal / Error Traceback: ---\033[0m"
-        tmux capture-pane -p -t "\$SESSION" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 25 || true
-        echo -e "\033[1;33m------------------------------------------\033[0m"
-        echo -e "Jalankan \033[1;36m./attach.sh\033[0m untuk melihat konsol, atau coba manual: \033[1;36m\$PY main.py\033[0m"
+        echo -e "\033[1;33m--- Output Layar Tmux: ---\033[0m"
+        tmux capture-pane -p -t "$SESSION" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 25 || true
+        echo -e "\033[1;33m--------------------------\033[0m"
+        echo -e "Jalankan \033[1;36m./attach.sh\033[0m untuk melihat konsol, atau coba manual: \033[1;36m$PY main.py\033[0m"
         exit 1
     fi
 else
-    echo -e "\033[1;31m[-] Gagal membuat sesi tmux '\$SESSION'. Pastikan paket tmux terpasang.\033[0m"
+    echo -e "\033[1;31m[-] Gagal membuat sesi tmux '$SESSION'. Pastikan paket tmux terpasang.\033[0m"
     exit 1
 fi
 EOF
@@ -483,7 +505,7 @@ SESSION="bot"
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     PID="$(pgrep -f "main.py" | head -n 1 || true)"
-    if [ -n "$PID" ]; then
+    if [ -n "$PID" ] && ps -p "$PID" >/dev/null 2>&1; then
         echo -e "\033[1;32m● Status: AKTIF (tmux session '$SESSION')\033[0m"
         echo "  PID: $PID"
         if command -v ps >/dev/null 2>&1; then
