@@ -252,6 +252,10 @@ fi
 if [ -f "requirements.txt" ]; then
     info "Menginstall pustaka dari requirements.txt ..."
     "$PIP_EXEC" install -r requirements.txt
+    if "$PYTHON_EXEC" -c "import sys; sys.exit(0 if sys.version_info >= (3, 13) else 1)" 2>/dev/null; then
+        info "Python 3.13+ terdeteksi, memastikan audioop-lts terpasang..."
+        "$PIP_EXEC" install audioop-lts 2>/dev/null || true
+    fi
     ok "Semua modul Python berhasil dipasang."
 else
     warn "File requirements.txt tidak ditemukan, melewati instalasi pip."

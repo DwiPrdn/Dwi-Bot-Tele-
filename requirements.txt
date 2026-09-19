@@ -20,3 +20,6 @@ pydub>=0.25.1
 psutil>=5.9.0
 cryptography>=41.0.0
 prompt_toolkit>=3.0.0
+
+# Python 3.13+ audioop compatibility (audioop removed from stdlib in 3.13+)
+audioop-lts>=0.2.0; python_version >= '3.13'
