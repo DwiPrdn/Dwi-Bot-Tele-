@@ -67,7 +67,10 @@ import logging
 import aiohttp
 from telethon import events, Button
 
-from moderation import render_fillings, send_stored_media_or_text, DEFAULT_WELCOME
+try:
+    from admins.moderation import render_fillings, send_stored_media_or_text, DEFAULT_WELCOME
+except ImportError:
+    from moderation import render_fillings, send_stored_media_or_text, DEFAULT_WELCOME
 
 logger = logging.getLogger("Verify")
 

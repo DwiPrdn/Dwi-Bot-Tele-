@@ -257,14 +257,23 @@ else
     warn "File requirements.txt tidak ditemukan, melewati instalasi pip."
 fi
 
-# Buat direktori data runtime jika belum ada
+## Buat direktori data runtime jika belum ada
 mkdir -p "$ROOT_DIR/dbbot/logs"
 mkdir -p "$ROOT_DIR/dbbot/session"
 mkdir -p "$ROOT_DIR/dbbot/db_chat"
 mkdir -p "$ROOT_DIR/dbbot/db_user"
 mkdir -p "$ROOT_DIR/dbbot/saved_media"
-mkdir -p "$ROOT_DIR/google"
+mkdir -p "$ROOT_DIR/scrapers/logs"
 mkdir -p "$ROOT_DIR/downloads"
+
+# Pastikan direktori data dapat ditulis oleh user saat ini
+CURRENT_USER="$(id -un)"
+CURRENT_GROUP="$(id -gn)"
+if [ "$(id -u)" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+    CURRENT_USER="$SUDO_USER"
+    CURRENT_GROUP="$(id -gn "$SUDO_USER" 2>/dev/null || id -gn)"
+fi
+run_as_root chown -R "$CURRENT_USER:$CURRENT_GROUP" "$ROOT_DIR/dbbot" 2>/dev/null || true
 
 # --- STEP 4: Configuration (.env) ---
 header "Konfigurasi Bot (.env)"
@@ -277,9 +286,7 @@ OLD_BOT_USERNAME="Plendes_bot"
 OLD_OWNER_ID=""
 OLD_BOT_ID=""
 OLD_GEMINI_KEYS=""
-OLD_GROQ_KEY=""
 OLD_MODEL_NAME="gemini-3.1-flash-lite"
-OLD_GROQ_MODEL="qwen/qwen3-32b"
 OLD_GOFILE_TOKEN=""
 OLD_BASE_PATH="$ROOT_DIR"
 
@@ -298,9 +305,7 @@ if [ -f ".env" ]; then
             OWNER_ID) OLD_OWNER_ID="$val" ;;
             BOT_ID) OLD_BOT_ID="$val" ;;
             GEMINI_KEYS) OLD_GEMINI_KEYS="$val" ;;
-            GROQ_KEY) OLD_GROQ_KEY="$val" ;;
             MODEL_NAME) OLD_MODEL_NAME="$val" ;;
-            GROQ_MODEL) OLD_GROQ_MODEL="$val" ;;
             GOFILE_TOKEN) OLD_GOFILE_TOKEN="$val" ;;
             BASE_PATH) OLD_BASE_PATH="$val" ;;
         esac
@@ -323,11 +328,9 @@ NEW_BOT_USERNAME=$(ask "Telegram BOT_USERNAME" "$OLD_BOT_USERNAME")
 NEW_OWNER_ID=$(ask "Telegram OWNER_ID" "$OLD_OWNER_ID")
 
 echo ""
-info "Konfigurasi AI Services (Gemini & Groq):"
+info "Konfigurasi AI Services (Google Gemini):"
 NEW_GEMINI_KEYS=$(ask "Gemini API Keys (pisahkan dengan koma jika multi-key)" "$OLD_GEMINI_KEYS")
 NEW_MODEL_NAME=$(ask "Gemini Model" "$OLD_MODEL_NAME")
-NEW_GROQ_KEY=$(ask "Groq API Key" "$OLD_GROQ_KEY")
-NEW_GROQ_MODEL=$(ask "Groq Model" "$OLD_GROQ_MODEL")
 
 echo ""
 info "Pengaturan Opsional:"
@@ -359,9 +362,6 @@ OWNER_ID=${NEW_OWNER_ID}
 GEMINI_KEYS=${NEW_GEMINI_KEYS}
 MODEL_NAME=${NEW_MODEL_NAME}
 
-GROQ_KEY=${NEW_GROQ_KEY}
-GROQ_MODEL=${NEW_GROQ_MODEL}
-
 # ==========================================
 # Storage & Mirror (Opsional)
 # ==========================================
@@ -378,39 +378,61 @@ header "Manajemen Eksekusi Bot"
 create_tmux_scripts() {
     info "Membuat script runner tmux (start.sh, stop.sh, restart.sh, status.sh, attach.sh)..."
 
-    cat <<'EOF' > start.sh
+    cat <<EOF > start.sh
 #!/usr/bin/env bash
 set -e
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$DIR"
+DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+cd "\$DIR"
 
 SESSION="bot"
 
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo -e "\033[1;33m[!] Sesi tmux '$SESSION' sudah berjalan.\033[0m"
+if tmux has-session -t "\$SESSION" 2>/dev/null; then
+    echo -e "\033[1;33m[!] Sesi tmux '\$SESSION' sudah berjalan.\033[0m"
     echo -e "Gunakan \033[1;36m./attach.sh\033[0m untuk melihat konsol atau \033[1;31m./stop.sh\033[0m untuk mematikan."
     exit 0
 fi
 
-if [ -f "$DIR/venv/bin/python3" ]; then
-    PY="$DIR/venv/bin/python3"
+# Cari interpreter Python yang valid
+if [ -f "\$DIR/venv/bin/python3" ]; then
+    PY="\$DIR/venv/bin/python3"
+elif [ -n "${PYTHON_EXEC}" ] && [ -x "${PYTHON_EXEC}" ]; then
+    PY="${PYTHON_EXEC}"
+elif command -v python3 >/dev/null 2>&1; then
+    PY="\$(command -v python3)"
+elif command -v python >/dev/null 2>&1; then
+    PY="\$(command -v python)"
 else
-    PY="$(command -v python3 || command -v python)"
+    echo -e "\033[1;31m[-] Interpreter Python tidak ditemukan!\033[0m"
+    exit 1
 fi
 
-tmux new-session -d -s "$SESSION" -c "$DIR" "$PY main.py"
-sleep 1
+mkdir -p "\$DIR/dbbot/logs" "\$DIR/scrapers/logs"
 
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo -e "\033[1;32m[+] Bot berhasil dijalankan di background (tmux session: '$SESSION')\033[0m"
-    echo -e "Perintah kontrol:"
-    echo -e "  \033[1;36m./attach.sh\033[0m  - Buka konsol interaktif bot"
-    echo -e "  \033[1;36m./status.sh\033[0m  - Cek status & log terbaru"
-    echo -e "  \033[1;36m./restart.sh\033[0m - Restart bot"
-    echo -e "  \033[1;36m./stop.sh\033[0m    - Hentikan bot"
+# Jalankan bot di dalam sesi tmux dengan penahan error agar traceback tidak hilang
+tmux new-session -d -s "\$SESSION" -c "\$DIR" "bash -c '\$PY main.py; EXIT_CODE=\\\$?; if [ \\\$EXIT_CODE -ne 0 ]; then echo -e \"\n\033[1;31m[!] Bot berhenti dengan error (exit code: \\\$EXIT_CODE).\033[0m\"; echo \"Tekan Enter untuk menutup sesi...\"; read -r; fi'"
+
+sleep 1.5
+
+if tmux has-session -t "\$SESSION" 2>/dev/null; then
+    # Cek apakah proses main.py benar-benar aktif berjalan
+    if pgrep -f "main.py" >/dev/null 2>&1; then
+        echo -e "\033[1;32m[+] Bot berhasil dijalankan di background (tmux session: '\$SESSION')\033[0m"
+        echo -e "Perintah kontrol:"
+        echo -e "  \033[1;36m./attach.sh\033[0m  - Buka konsol interaktif bot"
+        echo -e "  \033[1;36m./status.sh\033[0m  - Cek status & log terbaru"
+        echo -e "  \033[1;36m./restart.sh\033[0m - Restart bot"
+        echo -e "  \033[1;36m./stop.sh\033[0m    - Hentikan bot"
+    else
+        echo -e "\033[1;31m[-] Bot mengalami error saat startup!\033[0m"
+        echo -e "\033[1;33m--- Output Terminal / Error Traceback: ---\033[0m"
+        tmux capture-pane -p -t "\$SESSION" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 25 || true
+        echo -e "\033[1;33m------------------------------------------\033[0m"
+        echo -e "Jalankan \033[1;36m./attach.sh\033[0m untuk melihat konsol, atau coba manual: \033[1;36m\$PY main.py\033[0m"
+        exit 1
+    fi
 else
-    echo -e "\033[1;31m[-] Gagal memulai sesi tmux. Periksa log atau coba jalankan python3 main.py manual.\033[0m"
+    echo -e "\033[1;31m[-] Gagal membuat sesi tmux '\$SESSION'. Pastikan paket tmux terpasang.\033[0m"
     exit 1
 fi
 EOF
@@ -418,6 +440,7 @@ EOF
     cat <<'EOF' > stop.sh
 #!/usr/bin/env bash
 SESSION="bot"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     tmux kill-session -t "$SESSION"
@@ -425,6 +448,9 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
 else
     echo -e "\033[1;33m[!] Sesi '$SESSION' tidak sedang berjalan.\033[0m"
 fi
+
+# Hentikan sisa proses python main.py jika ada
+pkill -f "$DIR/main.py" 2>/dev/null || true
 EOF
 
     cat <<'EOF' > restart.sh
@@ -452,13 +478,16 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SESSION="bot"
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo -e "\033[1;32m● Status: AKTIF (tmux session '$SESSION')\033[0m"
-    PID="$(pgrep -f "python.*main.py" | head -n 1 || true)"
+    PID="$(pgrep -f "main.py" | head -n 1 || true)"
     if [ -n "$PID" ]; then
+        echo -e "\033[1;32m● Status: AKTIF (tmux session '$SESSION')\033[0m"
         echo "  PID: $PID"
         if command -v ps >/dev/null 2>&1; then
             ps -p "$PID" -o %cpu,%mem,etime,cmd --headers 2>/dev/null || true
         fi
+    else
+        echo -e "\033[1;33m● Status: Sesi tmux aktif, tetapi proses bot terhenti.\033[0m"
+        echo "  Gunakan ./attach.sh untuk memeriksa error di konsol."
     fi
 else
     echo -e "\033[1;31m○ Status: NONAKTIF\033[0m"
