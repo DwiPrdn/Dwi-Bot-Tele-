@@ -432,6 +432,12 @@ sudo systemctl stop telegram-bot     # Stop bot
 Have permission issue? Use sudo python3 main.py for run the bot script
 
 ---
+Notes
+---
+
+Some command is doesn't works, i will fix that later
+
+--
 
 ## License
 
